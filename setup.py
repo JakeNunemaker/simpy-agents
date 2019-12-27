@@ -10,7 +10,6 @@ setup(
     credits='Ontje Lünsdorf, Stefan Scherfke',
     description='An extension of SimPy for working with distinct agents.',
     install_requires=[],
-    packages=find_packages(where='simpy'),
-    package_dir={'': 'simpy'},
+    packages=["simpy", "simpy.resources"],
     include_package_data=True,
 )
