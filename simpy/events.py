@@ -4,6 +4,17 @@ This module contains the basic event types used in SimPy.
 The base class for all events is :class:`Event`. Though it can be directly
 used, there are several specialized subclasses of it.
 
+simpy-agents modifications:
+- added optional 'agent' parameter to `Event.__init__()`
+- added optional 'agent' parameter to `Timeout.__init__()`
+- added optional 'agent' parameter to `Initialize.__init__()`
+- added optional 'agent' parameter to `Process.__init__()`
+- added optional 'agent' parameter to `Condition.__init__()`
+- added optional 'agent' parameter to `AllOf.__init__()`
+- added optional 'agent' parameter to `AnyOf.__init__()`
+- modified all calls to `env.schedule()` to include the new 'agent' parameter
+- added `Environment.scheduled_agents` property
+
 .. autosummary::
 
     ~simpy.events.Event
@@ -11,7 +22,6 @@ used, there are several specialized subclasses of it.
     ~simpy.events.Process
     ~simpy.events.AnyOf
     ~simpy.events.AllOf
-
 """
 from simpy._compat import PY2
 from simpy.exceptions import Interrupt, StopProcess
@@ -59,8 +69,9 @@ class Event(object):
     of them.
 
     """
-    def __init__(self, env):
+    def __init__(self, env, agent=None):
         self.env = env
+        self.agent = agent
         """The :class:`~simpy.core.Environment` the event lives in."""
         self.callbacks = []
         """List of functions that are called when the event is processed."""
@@ -142,7 +153,7 @@ class Event(object):
         """
         self._ok = event._ok
         self._value = event._value
-        self.env.schedule(self)
+        self.env.schedule(self, agent=self.agent)
 
     def succeed(self, value=None):
         """Set the event's value, mark it as successful and schedule it for
@@ -156,7 +167,7 @@ class Event(object):
 
         self._ok = True
         self._value = value
-        self.env.schedule(self)
+        self.env.schedule(self, agent=self.agent)
         return self
 
     def fail(self, exception):
@@ -174,19 +185,19 @@ class Event(object):
             raise ValueError('%s is not an exception.' % exception)
         self._ok = False
         self._value = exception
-        self.env.schedule(self)
+        self.env.schedule(self, agent=self.agent)
         return self
 
     def __and__(self, other):
         """Return a :class:`~simpy.events.Condition` that will be triggered if
         both, this event and *other*, have been processed."""
-        return Condition(self.env, Condition.all_events, [self, other])
+        return Condition(self.env, Condition.all_events, [self, other], agent=self.agent)
 
     def __or__(self, other):
         """Return a :class:`~simpy.events.Condition` that will be triggered if
         either this event or *other* have been processed (or even both, if they
         happened concurrently)."""
-        return Condition(self.env, Condition.any_events, [self, other])
+        return Condition(self.env, Condition.any_events, [self, other], agent=self.agent)
 
 
 class Timeout(Event):
@@ -196,17 +207,18 @@ class Timeout(Event):
     This event is automatically triggered when it is created.
 
     """
-    def __init__(self, env, delay, value=None):
+    def __init__(self, env, delay, value=None, agent=None):
         if delay < 0:
             raise ValueError('Negative delay %s' % delay)
         # NOTE: The following initialization code is inlined from
         # Event.__init__() for performance reasons.
         self.env = env
+        self.agent = agent
         self.callbacks = []
         self._value = value
         self._delay = delay
         self._ok = True
-        env.schedule(self, NORMAL, delay)
+        env.schedule(self, NORMAL, delay, agent=agent)
 
     def _desc(self):
         """Return a string *Timeout(delay[, value=value])*."""
@@ -221,10 +233,11 @@ class Initialize(Event):
     This event is automatically triggered when it is created.
 
     """
-    def __init__(self, env, process):
+    def __init__(self, env, process, agent=None):
         # NOTE: The following initialization code is inlined from
         # Event.__init__() for performance reasons.
         self.env = env
+        self.agent = agent
         self.callbacks = [process._resume]
         self._value = None
 
@@ -232,7 +245,7 @@ class Initialize(Event):
         # will be handled before interrupts. Otherwise a process whose
         # generator has not yet been started could be interrupted.
         self._ok = True
-        env.schedule(self, URGENT)
+        env.schedule(self, URGENT, agent=agent)
 
 
 class Interruption(Event):
@@ -242,10 +255,11 @@ class Interruption(Event):
     This event is automatically triggered when it is created.
 
     """
-    def __init__(self, process, cause):
+    def __init__(self, process, cause, agent=None):
         # NOTE: The following initialization code is inlined from
         # Event.__init__() for performance reasons.
         self.env = process.env
+        self.agent = agent
         self.callbacks = [self._interrupt]
         self._value = Interrupt(cause)
         self._ok = False
@@ -259,7 +273,7 @@ class Interruption(Event):
             raise RuntimeError('A process is not allowed to interrupt itself.')
 
         self.process = process
-        self.env.schedule(self, URGENT)
+        self.env.schedule(self, URGENT, agent=agent)
 
     def _interrupt(self, event):
         # Ignore dead processes. Multiple concurrently scheduled interrupts
@@ -296,7 +310,7 @@ class Process(Event):
     Processes can be interrupted during their execution by :meth:`interrupt`.
 
     """
-    def __init__(self, env, generator):
+    def __init__(self, env, generator, agent=None):
         if not hasattr(generator, 'throw'):
             # Implementation note: Python implementations differ in the
             # generator types they provide. Cython adds its own generator type
@@ -312,13 +326,14 @@ class Process(Event):
         # NOTE: The following initialization code is inlined from
         # Event.__init__() for performance reasons.
         self.env = env
+        self.agent = agent
         self.callbacks = []
         self._value = PENDING
 
         self._generator = generator
 
         # Schedule the start of the execution of the process.
-        self._target = Initialize(env, self)
+        self._target = Initialize(env, self, agent=agent)
 
     def _desc(self):
         """Return a string *Process(process_func_name)*."""
@@ -380,7 +395,7 @@ class Process(Event):
                 event = None
                 self._ok = True
                 self._value = e.args[0] if len(e.args) else None
-                self.env.schedule(self)
+                self.env.schedule(self, agent=self.agent)
                 break
             except BaseException as e:
                 # Process has failed.
@@ -391,7 +406,7 @@ class Process(Event):
                 # does not add any useful information.
                 e.__traceback__ = tb.tb_next
                 self._value = e
-                self.env.schedule(self)
+                self.env.schedule(self, agent=self.agent)
                 break
 
             # Process returned another event to wait upon.
@@ -481,8 +496,8 @@ class Condition(Event):
     Condition events can be nested.
 
     """
-    def __init__(self, env, evaluate, events):
-        super(Condition, self).__init__(env)
+    def __init__(self, env, evaluate, events, agent=None):
+        super(Condition, self).__init__(env, agent=agent)
         self._evaluate = evaluate
         self._events = events if type(events) is tuple else tuple(events)
         self._count = 0
@@ -583,8 +598,8 @@ class AllOf(Condition):
     any of *events* failed.
 
     """
-    def __init__(self, env, events):
-        super(AllOf, self).__init__(env, Condition.all_events, events)
+    def __init__(self, env, events, agent=None):
+        super(AllOf, self).__init__(env, Condition.all_events, events, agent=agent)
 
 
 class AnyOf(Condition):
@@ -593,8 +608,8 @@ class AnyOf(Condition):
     any of *events* failed.
 
     """
-    def __init__(self, env, events):
-        super(AnyOf, self).__init__(env, Condition.any_events, events)
+    def __init__(self, env, events, agent=None):
+        super(AnyOf, self).__init__(env, Condition.any_events, events, agent=agent)
 
 
 def _describe_frame(frame):

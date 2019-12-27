@@ -1,6 +1,10 @@
 """
 Core components for event-discrete simulation environments.
 
+simpy-agents modifications:
+- added optional 'agent' parameter to `Environment.schedule()`
+- modified `Environment.step()` to accomodate the above change
+- added `Environment.scheduled_agents` property
 """
 import types
 from heapq import heappush, heappop
@@ -191,10 +195,19 @@ class Environment(BaseEnvironment):
     all_of = BoundClass(AllOf)
     any_of = BoundClass(AnyOf)
 
-    def schedule(self, event, priority=NORMAL, delay=0):
+    def schedule(self, event, priority=NORMAL, delay=0, agent=None):
         """Schedule an *event* with a given *priority* and a *delay*."""
         heappush(self._queue,
-                 (self._now + delay, priority, next(self._eid), event))
+                 (self._now + delay, priority, next(self._eid), event, agent))
+
+    @property
+    def scheduled_agents(self):
+        """
+        Returns a list of scheduled agents. Used by the `process` decorator to
+        verify that an agent is not already scheduled.
+        """
+
+        return [i[4] for i in self._queue]
 
     def peek(self):
         """Get the time of the next scheduled event. Return
@@ -211,7 +224,7 @@ class Environment(BaseEnvironment):
 
         """
         try:
-            self._now, _, _, event = heappop(self._queue)
+            self._now, _, _, event, _ = heappop(self._queue)
         except IndexError:
             raise EmptySchedule()
 
