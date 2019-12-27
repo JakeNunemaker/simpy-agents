@@ -7,6 +7,7 @@ setup(
     version='0.1',
     author='Jake Nunemaker',
     author_email='jake.d.nunemaker@gmail.com',
+    credits='Ontje Lünsdorf, Stefan Scherfke',
     description='An extension of SimPy for working with distinct agents.',
     install_requires=[],
     packages=find_packages(where='simpy'),
