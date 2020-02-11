@@ -16,7 +16,7 @@ setup(
     name='simpy-agents',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    description="An extension of SimPy for working with distinct agents."
+    description="An extension of SimPy for working with distinct agents.",
     long_description=long_description,
     author='Jake Nunemaker',
     author_email='jake.d.nunemaker@gmail.com',
