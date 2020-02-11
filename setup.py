@@ -21,7 +21,7 @@ setup(
     author='Jake Nunemaker',
     author_email='jake.d.nunemaker@gmail.com',
     credits='Ontje Lünsdorf, Stefan Scherfke',
-    license="BSD-3",
+    license="MIT",
     url="https://github.com/JakeNunemaker/simpy-agents",
     install_requires=[],
     packages=find_packages(
